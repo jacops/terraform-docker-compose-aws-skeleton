@@ -2,29 +2,42 @@ version: '2.1'
 
 services:
   terraform:
-    image: "${DOCKER_HUB:-}${DOCKER_IMAGE:-terraform-aws-skeleton}:${DOCKER_IMAGE_TAG:-latest}"
-    build:
-      context: .
-      args:
-        TERRAFORM_IMAGE: "${TERRAFORM_IMAGE:-hashicorp/terraform}"
-        TERRAFORM_IMAGE_TAG: "${TERRAFORM_IMAGE_TAG:-latest}"
+    image: "${DOCKER_HUB:-}${TERRAFORM_IMAGE:-hashicorp/terraform}:${TERRAFORM_IMAGE_TAG:-latest}"
+    working_dir: /workspace/manifests
+    volumes:
+      - .:/workspace
     environment:
       AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-}"
       AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-}"
       AWS_DEFAULT_REGION: "${AWS_DEFAULT_REGION:-eu-west-2}"
+      AWS_PROFILE: "${AWS_PROFILE:-}"
       TF_VAR_environment: "${ENVIRONMENT:-test}"
 
   terraform-init:
     extends:
       service: terraform
-    entrypoint: []
     command: |
-      terraform init
+      init
         -backend-config="bucket=${TERRAFORM_BACKEND_S3_BUCKET_NAME}"
 
   aws-cli:
     image: "${AWS_CLI_IMAGE:-mikesir87/aws-cli}:${AWS_CLI_IMAGE_TAG:-latest}"
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
     environment:
       AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-}"
       AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-}"
-      AWS_DEFAULT_REGION: "${AWS_DEFAULT_REGION:-eu-west-2}"
+      AWS_DEFAULT_REGION: "${AWS_DEFAULT_REGION:-}"
+      AWS_SDK_LOAD_CONFIG: "${AWS_SDK_LOAD_CONFIG:-1}"
+      AWS_PROFILE: "${AWS_PROFILE:-}"
+
+  backend-create:
+    extends:
+      service: aws-cli
+    command: "bin/backend/create.sh -b ${TERRAFORM_BACKEND_S3_BUCKET_NAME}"
+
+  backend-destroy:
+    extends:
+      service: aws-cli
+    command: "bin/backend/destroy.sh -b ${TERRAFORM_BACKEND_S3_BUCKET_NAME}"
